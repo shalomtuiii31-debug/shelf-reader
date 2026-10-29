@@ -55,11 +55,6 @@ function novelChapterFor(m, anchors) {
   if (b && b[0] !== a[0]) return Math.round(a[1] + (m - a[0]) * (b[1] - a[1]) / (b[0] - a[0]));
   return Math.round(m * a[1] / a[0]);
 }
-// Index of the book chapter numbered n (by the first number in its title), else the nth chapter.
-function chapterIndex(titles, n) {
-  const i = titles.findIndex(t => +(t.match(/\d+/)?.[0]) === n);
-  return i >= 0 ? i : Math.min(n - 1, titles.length - 1);
-}
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -68,12 +63,10 @@ function el(tag, cls, text) {
   return e;
 }
 
-let metasCache = [];
 async function renderFollowing() {
   const box = $('#following');
   if (!releases?.series?.length) { box.hidden = true; return; }
   box.hidden = false;
-  metasCache = await all('meta');
   const list = $('#followList');
   list.innerHTML = '';
   for (const s of releases.series) {
@@ -109,54 +102,29 @@ async function renderFollowing() {
     }
     card.append(row);
 
-    if (s.novel) card.append(novelBridge(s, st, latest));
+    if (s.novel) card.append(novelBridge(s, st));
     list.append(card);
   }
 }
 
-// Manhwa → novel: when caught up, offer to continue the story in the linked novel.
-function novelBridge(s, st, latest) {
+// Manhwa → novel: the novel chapter that picks up where the manhwa is. The novel is complete,
+// so there's no countdown; the estimate moves with the manhwa and can be nudged ±1.
+function novelBridge(s, st) {
   const wrap = el('div', 'bridge');
-  const book = metasCache.find(m => m.id === st.novel);
-  const est = st.read ? novelChapterFor(st.read, st.anchors) : null;
-  if (book && est && st.read >= latest) {
-    const go = el('button', 'btn primary', `Caught up! Continue in the novel from Chapter ${est + 1} ›`);
-    go.onclick = () => openBook(book.id, { ch: chapterIndex(book.chapterTitles, est + 1) });
-    wrap.append(go);
-  } else if (book && est) {
-    wrap.append(el('div', 'small muted', `Manhwa Ch ${st.read} ≈ novel Ch ${est}. The novel button appears once you're caught up.`));
+  const anchors = st.anchors?.length ? st.anchors : (s.novelAnchors || []);
+  if (!st.read || !anchors.length) {
+    wrap.append(el('div', 'small muted', '📖 Set your manhwa chapter to see where you are in the novel.'));
+    return wrap;
   }
-
-  const det = el('details');
-  det.append(el('summary', 'small', book ? `Novel: ${book.title}` : 'Link the novel'));
-  const sel = el('select');
-  sel.add(new Option('Choose a book from your shelf…', ''));
-  for (const m of metasCache.filter(m => m.kind !== 'comic')) sel.add(new Option(m.title, m.id));
-  sel.value = st.novel;
-  sel.onchange = () => { st.novel = sel.value; saveFollow(); renderFollowing(); };
-  det.append(sel);
-
-  det.append(el('div', 'small muted', 'Match points: where a manhwa chapter ends in the novel. One is enough to start; more make it more accurate.'));
-  for (const [m, n] of st.anchors) {
-    const r = el('div', 'frow small', `Manhwa Ch ${m} → novel Ch ${n}`);
-    const x = el('button', 'icon', '✕');
-    x.onclick = () => { st.anchors = st.anchors.filter(a => a[0] !== m); saveFollow(); renderFollowing(); };
-    r.append(x);
-    det.append(r);
+  const n = novelChapterFor(st.read, anchors) + 1 + (st.novelAdjust || 0);
+  const row = el('div', 'frow');
+  row.append(el('span', 'small novelpos', `📖 Novel (complete): continue at Chapter ${n}`));
+  for (const [label, d] of [['−1', -1], ['+1', 1]]) {
+    const btn = el('button', 'btn', label);
+    btn.onclick = () => { st.novelAdjust = (st.novelAdjust || 0) + d; saveFollow(); renderFollowing(); };
+    row.append(btn);
   }
-  const add = el('div', 'frow');
-  const mi = el('input'); mi.type = 'number'; mi.placeholder = 'Manhwa ch'; mi.value = st.read || '';
-  const ni = el('input'); ni.type = 'number'; ni.placeholder = 'Novel ch';
-  const ab = el('button', 'btn', 'Add');
-  ab.onclick = () => {
-    if (!(+mi.value > 0 && +ni.value > 0)) return;
-    st.anchors = [...st.anchors.filter(a => a[0] !== +mi.value), [+mi.value, +ni.value]].sort((a, b) => a[0] - b[0]);
-    saveFollow(); renderFollowing();
-  };
-  add.append(mi, ni, ab);
-  det.append(add);
-  if (st.anchors.length || st.novel) det.open = false;
-  wrap.append(det);
+  wrap.append(row, el('div', 'small muted', `Matches manhwa Ch ${st.read}. Estimated from where Season 1 ends (Ch 109 ≈ novel Ch 159); nudge it if it's a chapter off.`));
   return wrap;
 }
 

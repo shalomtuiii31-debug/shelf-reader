@@ -266,6 +266,12 @@
    "type": "Manhwa",
    "url": "https://www.webtoons.com/en/search?keyword=Myst%2C%20Might%2C%20Mayhem",
    "novel": true,
+   "novelAnchors": [
+    [
+     109,
+     159
+    ]
+   ],
    "cover": "https://cdn.mangaupdates.com/image/i540075.jpg",
    "status": "121 Chapters (Ongoing)\n\n**S1**: 109 Chapters (1\\~109)             \n**S2:** 12 Chapters (110\\~?)",
    "releases": [
