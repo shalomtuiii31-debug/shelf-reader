@@ -124,7 +124,22 @@ function novelBridge(s, st) {
     btn.onclick = () => { st.novelAdjust = (st.novelAdjust || 0) + d; saveFollow(); renderFollowing(); };
     row.append(btn);
   }
-  wrap.append(row, el('div', 'small muted', `Matches manhwa Ch ${st.read}. Estimated from where Season 1 ends (Ch 109 ≈ novel Ch 159); nudge it if it's a chapter off.`));
+  // Reading link: the reader's own bookmark, kept on this device.
+  const links = el('div', 'frow');
+  if (st.novelUrl) {
+    const a = el('a', 'btn primary', `Read Ch ${n} ›`);
+    a.href = st.novelUrl; a.target = '_blank'; a.rel = 'noopener';
+    links.append(a);
+  }
+  const set = el('button', 'btn', st.novelUrl ? 'Change link' : 'Set reading link');
+  set.onclick = () => {
+    const u = prompt('Web address where you read the novel:', st.novelUrl || '');
+    if (u === null) return;
+    st.novelUrl = /^https?:\/\//.test(u.trim()) ? u.trim() : '';
+    saveFollow(); renderFollowing();
+  };
+  links.append(set);
+  wrap.append(row, links, el('div', 'small muted', `Matches manhwa Ch ${st.read}. Estimated from where Season 1 ends (Ch 109 ≈ novel Ch 159); nudge it if it's a chapter off.`));
   return wrap;
 }
 
