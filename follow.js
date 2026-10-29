@@ -92,9 +92,12 @@ async function renderFollowing() {
       const v = prompt(`${s.title}: which chapter have you read up to?`, st.read || latest);
       if (v !== null && +v >= 0) { st.read = Math.floor(+v); saveFollow(); renderFollowing(); }
     };
-    const plus = el('button', 'btn', '+1');
-    plus.onclick = () => { st.read = (st.read || 0) + 1; saveFollow(); renderFollowing(); };
-    row.append(you, plus);
+    row.append(you);
+    for (const d of [1, 5, 10]) {
+      const plus = el('button', 'btn', `+${d}`);
+      plus.onclick = () => { st.read = (st.read || 0) + d; saveFollow(); renderFollowing(); };
+      row.append(plus);
+    }
     if (s.url) {
       const a = el('a', 'btn', 'Read official ›');
       a.href = s.url; a.target = '_blank'; a.rel = 'noopener';
@@ -119,7 +122,7 @@ function novelBridge(s, st) {
   const n = novelChapterFor(st.read, anchors) + 1 + (st.novelAdjust || 0);
   const row = el('div', 'frow');
   row.append(el('span', 'small novelpos', `📖 Novel (complete): continue at Chapter ${n}`));
-  for (const [label, d] of [['−1', -1], ['+1', 1]]) {
+  for (const [label, d] of [['−5', -5], ['−1', -1], ['+1', 1], ['+5', 5]]) {
     const btn = el('button', 'btn', label);
     btn.onclick = () => { st.novelAdjust = (st.novelAdjust || 0) + d; saveFollow(); renderFollowing(); };
     row.append(btn);
