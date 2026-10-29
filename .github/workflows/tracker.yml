@@ -1,0 +1,18 @@
+name: Release tracker
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tracker/fetch.py
+      - run: |
+          git config user.name "release-tracker"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add releases.json
+          git diff --cached --quiet || { git commit -m "Update release dates" && git push; }
