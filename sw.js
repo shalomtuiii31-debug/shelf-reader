@@ -1,12 +1,12 @@
 // Caches the app so it opens with no internet. Books themselves live in IndexedDB.
-const CACHE = 'shelf-v6';
+const CACHE = 'shelf-v7';
 // Voice engine files and downloaded voices are large and rarely change, so they live in their own cache that survives updates.
 const VOICES = 'shelf-voices';
 const isVoiceFile = url => url.hostname.endsWith('huggingface.co') || url.hostname === 'cdn.mangaupdates.com' || url.pathname.includes('/vendor/');
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'follow.js', 'jszip.min.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES.map(f => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
@@ -40,7 +40,8 @@ self.addEventListener('fetch', e => {
   }
   e.respondWith(caches.open(CACHE).then(async cache => {
     const cached = await cache.match(e.request, { ignoreSearch: true });
-    const fresh = fetch(e.request).then(res => {
+    // Bypass the browser's HTTP cache so updates arrive straight away.
+    const fresh = fetch(e.request.url, { cache: 'no-cache' }).then(res => {
       if (res.ok) cache.put(e.request, res.clone());
       return res;
     }).catch(() => cached);
