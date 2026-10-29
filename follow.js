@@ -124,16 +124,17 @@ function novelBridge(s, st) {
     btn.onclick = () => { st.novelAdjust = (st.novelAdjust || 0) + d; saveFollow(); renderFollowing(); };
     row.append(btn);
   }
-  // Reading link: the reader's own bookmark, kept on this device.
+  // Reading link: built in per series, or the reader's own link if they changed it on this device.
+  const url = st.novelUrl || s.novelUrl;
   const links = el('div', 'frow');
-  if (st.novelUrl) {
+  if (url) {
     const a = el('a', 'btn primary', `Read Ch ${n} ›`);
-    a.href = st.novelUrl; a.target = '_blank'; a.rel = 'noopener';
+    a.href = url; a.target = '_blank'; a.rel = 'noopener';
     links.append(a);
   }
-  const set = el('button', 'btn', st.novelUrl ? 'Change link' : 'Set reading link');
+  const set = el('button', 'btn', url ? 'Change link' : 'Set reading link');
   set.onclick = () => {
-    const u = prompt('Web address where you read the novel:', st.novelUrl || '');
+    const u = prompt('Web address where you read the novel:', url || '');
     if (u === null) return;
     st.novelUrl = /^https?:\/\//.test(u.trim()) ? u.trim() : '';
     saveFollow(); renderFollowing();

@@ -4,5 +4,6 @@
   { "id": "nano-machine", "title": "Nano Machine", "type": "Manhwa", "mu": 114563652, "groups": [] },
   { "id": "myst-might-mayhem", "title": "Myst, Might, Mayhem", "type": "Manhwa", "mu": 66602465958,
     "groups": ["LINE Webtoon"], "url": "https://www.webtoons.com/en/search?keyword=Myst%2C%20Might%2C%20Mayhem", "novel": true,
-    "novelAnchors": [[109, 159]] }
+    "novelAnchors": [[109, 159]],
+    "novelUrl": "https://www.webnovel.com/book/34539234908944305/catalog" }
 ]
