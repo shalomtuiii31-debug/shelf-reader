@@ -80,6 +80,9 @@ async function renderFollowing() {
     if (!s.releases.length) continue;
     const st = fstate(s.id), sc = schedule(s), latest = sc.last.ch;
     const card = el('div', 'follow');
+    const thumb = el('div', 'cover');
+    if (s.cover) thumb.style.backgroundImage = `url("${s.cover}")`;
+    card.append(thumb);
     const head = el('div', 'fhead');
     head.append(el('div', 't', s.title), el('span', 'muted small', s.type));
     if (latest > st.read && st.read) head.append(el('span', 'pill new', `${latest - st.read} new`));

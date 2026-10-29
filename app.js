@@ -31,9 +31,11 @@ const put = (s, v) => tx(s, 'readwrite', st => st.put(v));
 const del = (s, k) => tx(s, 'readwrite', st => st.delete(k));
 
 // ---------- Settings ----------
-const defaults = { theme: 'dark', fontSize: 19, lineHeight: 1.7, rate: 1, voiceURI: '', engine: 'device', hdVoice: 'en_US-hfc_female-medium' };
+const defaults = { theme: 'neon', fontSize: 19, lineHeight: 1.7, rate: 1, voiceURI: '', engine: 'device', hdVoice: 'en_US-hfc_female-medium' };
 let settings = { ...defaults };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('shelf-settings') || '{}')); } catch {}
+// Themes were renamed in the redesign.
+settings.theme = { dark: 'night', light: 'paper', sepia: 'paper' }[settings.theme] || settings.theme;
 function saveSettings() {
   try { localStorage.setItem('shelf-settings', JSON.stringify(settings)); } catch {}
   applySettings();
@@ -278,8 +280,10 @@ function coverEl(m) {
   } else {
     // Generated cover: colours derived from the book so each one looks distinct.
     const h = parseInt(m.id.slice(1), 36) % 360;
-    el.style.background = `linear-gradient(150deg, hsl(${h} 55% 48%), hsl(${(h + 60) % 360} 60% 22%))`;
-    el.textContent = [...m.title.trim()][0]?.toUpperCase() || '?';
+    el.style.backgroundImage = `linear-gradient(155deg, hsl(${h} 75% 62%), hsl(${(h + 40) % 360} 60% 40%) 55%, hsl(${(h + 80) % 360} 55% 16%))`;
+    el.innerHTML = '<span class="ci"></span><span class="ct"></span>';
+    el.querySelector('.ci').textContent = [...m.title.trim()][0]?.toUpperCase() || '?';
+    el.querySelector('.ct').textContent = m.title;
   }
   return el;
 }
@@ -294,6 +298,10 @@ async function renderLibrary() {
   const prog = Object.fromEntries(progress.map(p => [p.id, p]));
   metas.sort((a, b) => (prog[b.id]?.updatedAt || b.addedAt) - (prog[a.id]?.updatedAt || a.addedAt));
   $('#empty').hidden = metas.length > 0;
+  const hour = new Date().getHours();
+  const followed = typeof releases !== 'undefined' && releases?.series?.length;
+  $('#greet').textContent = [hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening',
+    `${metas.length} book${metas.length === 1 ? '' : 's'}`, followed ? `${followed} followed` : ''].filter(Boolean).join(' · ');
 
   const last = metas.find(m => prog[m.id]);
   const cont = $('#continue');
@@ -303,7 +311,9 @@ async function renderLibrary() {
     const el = document.createElement('div');
     el.className = 'continue';
     el.innerHTML = `<div class="info"><div class="k">Continue reading</div><div class="t"></div><div class="small"></div></div>`;
-    el.prepend(coverEl(last));
+    const cov = coverEl(last);
+    el.style.setProperty('--art', cov.style.backgroundImage);
+    el.prepend(cov);
     el.querySelector('.t').textContent = last.title;
     el.querySelector('.small').textContent = `${last.chapterTitles[pr.ch] || ''} · ${Math.round(pr.pct * 100)}%`;
     el.onclick = () => openBook(last.id);

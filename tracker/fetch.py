@@ -31,7 +31,7 @@ for s in json.loads((ROOT / 'tracker/series.json').read_text()):
             first_seen[ch] = r['release_date']
     releases = sorted(({'ch': c, 'date': d} for c, d in first_seen.items()), key=lambda x: (x['date'], x['ch']))[-30:]
     out.append({**{k: v for k, v in s.items() if k not in ('mu', 'groups')},
-                'url': s.get('url') or info.get('url'), 'status': info.get('status') or '', 'releases': releases})
+                'url': s.get('url') or info.get('url'), 'cover': ((info.get('image') or {}).get('url') or {}).get('original'), 'status': info.get('status') or '', 'releases': releases})
 
 data = json.dumps({'series': out}, indent=1, ensure_ascii=False) + '\n'
 target = ROOT / 'releases.json'

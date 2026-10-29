@@ -1,8 +1,8 @@
 // Caches the app so it opens with no internet. Books themselves live in IndexedDB.
-const CACHE = 'shelf-v5';
+const CACHE = 'shelf-v6';
 // Voice engine files and downloaded voices are large and rarely change, so they live in their own cache that survives updates.
 const VOICES = 'shelf-voices';
-const isVoiceFile = url => url.hostname.endsWith('huggingface.co') || url.pathname.includes('/vendor/');
+const isVoiceFile = url => url.hostname.endsWith('huggingface.co') || url.hostname === 'cdn.mangaupdates.com' || url.pathname.includes('/vendor/');
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'follow.js', 'jszip.min.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
