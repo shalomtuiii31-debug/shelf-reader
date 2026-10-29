@@ -212,7 +212,23 @@ async function parseComicZip(file) {
   if (!names.length) throw new Error('no images found in this archive');
   return buildComic(file.name.replace(/\.(cbz|zip)$/i, ''), names.map(n => [n, async () => new Blob([await zip.file(n).async('arraybuffer')], { type: mimeOf(n) })]));
 }
-const parseImageFiles = files => buildComic(files[0].name.replace(/[-_ ]*\d*\.\w+$/, '') || 'Comic', files.map(f => [f.name, async () => f]));
+// CBR/CB7/CBT (and ZIPs JSZip can't open) via libarchive compiled to WebAssembly, loaded only when needed.
+async function parseComicArchive(file) {
+  const { Archive } = await import('./vendor/archive/libarchive.js');
+  Archive.init({ workerUrl: new URL('vendor/archive/worker-bundle.js', location.href).href });
+  const archive = await Archive.open(file);
+  try {
+    const entries = (await archive.getFilesArray())
+      .map(({ file: f, path }) => [path + f.name, f])
+      .filter(([n]) => IMG_RE.test(n) && !/(^|\/)(__MACOSX|\.)/.test(n));
+    if (!entries.length) throw new Error(await archive.hasEncryptedData() ? 'this archive is password-protected' : 'no images found in this archive');
+    return await buildComic(file.name.replace(/\.(cb[rz7t]|rar|zip|7z)$/i, ''),
+      entries.map(([n, f]) => [n, async () => new Blob([await f.extract()], { type: mimeOf(n) })]));
+  } finally {
+    archive.close();
+  }
+}
+const parseImageFiles =files => buildComic(files[0].name.replace(/[-_ ]*\d*\.\w+$/, '') || 'Comic', files.map(f => [f.name, async () => f]));
 
 async function saveBook(book) {
   const id = bookId(book.title, book.author, book.chapters.length);
@@ -230,8 +246,8 @@ async function addFiles(files) {
   const pics = files.filter(f => f.type.startsWith('image/') || IMG_RE.test(f.name));
   const jobs = files.filter(f => !pics.includes(f)).map(f => [f.name, () => {
     if (/\.epub$/i.test(f.name) || f.type === 'application/epub+zip') return parseEpub(f);
-    if (/\.(cbz|zip)$/i.test(f.name)) return parseComicZip(f);
-    if (/\.cbr$/i.test(f.name)) throw new Error('CBR (RAR) files are not supported yet — convert to CBZ');
+    if (/\.(cbz|zip)$/i.test(f.name)) return parseComicZip(f).catch(() => parseComicArchive(f));
+    if (/\.(cbr|cb7|cbt|rar|7z)$/i.test(f.name)) return parseComicArchive(f);
     return parseTxt(f);
   }]);
   if (pics.length) jobs.push([`${pics.length} images`, () => parseImageFiles(pics)]);
