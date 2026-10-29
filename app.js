@@ -31,7 +31,7 @@ const put = (s, v) => tx(s, 'readwrite', st => st.put(v));
 const del = (s, k) => tx(s, 'readwrite', st => st.delete(k));
 
 // ---------- Settings ----------
-const defaults = { theme: 'dark', fontSize: 19, lineHeight: 1.7, rate: 1, voiceURI: '' };
+const defaults = { theme: 'dark', fontSize: 19, lineHeight: 1.7, rate: 1, voiceURI: '', engine: 'device', hdVoice: 'en_US-hfc_female-medium' };
 let settings = { ...defaults };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('shelf-settings') || '{}')); } catch {}
 function saveSettings() {
@@ -326,7 +326,7 @@ const pagedMode = () => isComic() && book.meta.layout !== 'vertical';
 async function openBook(id) {
   const [data, meta, pr] = await Promise.all([get('books', id), get('meta', id), get('progress', id)]);
   if (!data) return;
-  book = { id, meta, chapters: data.chapters, images: data.images || [] };
+  book = { id, meta, chapters: data.chapters, images: data.images || [], coverUrl: meta.cover ? URL.createObjectURL(meta.cover) : '' };
   $('#bookTitle').textContent = meta.title;
   for (const el of ['#playBtn', '#rate', '#sleep']) $(el).hidden = isComic();
   $('#pageInfo').hidden = !isComic();
@@ -341,6 +341,7 @@ function closeBook() {
   saveProgress();
   pageUrls.forEach(URL.revokeObjectURL);
   pageUrls = [];
+  if (book.coverUrl) URL.revokeObjectURL(book.coverUrl);
   book = null;
   $('#reader').hidden = true;
   $('#library').hidden = false;
@@ -452,12 +453,22 @@ function currentVoice() {
   return synth?.getVoices().find(v => v.voiceURI === settings.voiceURI) || null;
 }
 
+const useHd = () => settings.engine === 'hd';
+
 function startSpeaking(fromP) {
-  if (!synth) return alert('Text-to-speech is not supported in this browser.');
-  synth.cancel();
+  if (!useHd() && !synth) return alert('Text-to-speech is not supported in this browser.');
+  synth?.cancel();
+  clearHd();
   tts.on = true;
   tts.gen++;
   tts.p = fromP;
+  if (useHd()) {
+    hd.next = nextText({ ch: cur.ch, p: fromP });
+    hd.waiting = true;
+    $('#playBtn').textContent = '… Preparing';
+    hdProduce(tts.gen);
+    return;
+  }
   $('#playBtn').textContent = '❚❚ Pause';
   requestWakeLock();
   speakPara(tts.gen);
@@ -467,12 +478,23 @@ function stopSpeaking() {
   tts.on = false;
   tts.gen++;
   synth?.cancel();
+  clearHd();
   clearTimeout(tts.sleepTimer);
   $('#sleep').value = '';
   $('#playBtn').textContent = '▶ Listen';
   document.querySelector('#text .speaking')?.classList.remove('speaking');
   tts.wakeLock?.release().catch(() => {});
   tts.wakeLock = null;
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
+}
+
+function markSpeaking(p) {
+  const el = $('#text').children[p];
+  document.querySelector('#text .speaking')?.classList.remove('speaking');
+  el?.classList.add('speaking');
+  el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  cur.p = p;
+  saveProgress();
 }
 
 function speakPara(gen) {
@@ -486,12 +508,7 @@ function speakPara(gen) {
     showChapter(cur.ch + 1, 0);
     tts.p = 0;
   }
-  const el = $('#text').children[tts.p];
-  document.querySelector('#text .speaking')?.classList.remove('speaking');
-  el.classList.add('speaking');
-  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  cur.p = tts.p;
-  saveProgress();
+  markSpeaking(tts.p);
 
   const pieces = chunk(book.chapters[cur.ch].paras[tts.p]);
   let k = 0;
@@ -516,6 +533,154 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && tts.on && !tts.wakeLock) requestWakeLock();
   if (document.visibilityState === 'hidden') saveProgress();
 });
+
+// ---------- HD offline voice ----------
+// Generates real audio on the device (Piper voices) and plays it through an <audio> element,
+// so phones keep reading with the screen locked and show lock-screen controls.
+const HD_VOICES = {
+  'en_US-hfc_female-medium': 'Hannah — US, female (60 MB)',
+  'en_US-ryan-medium': 'Ryan — US, male (60 MB)',
+  'en_GB-alba-medium': 'Alba — UK, female (60 MB)',
+  'en_GB-northern_english_male-medium': 'Oliver — UK, male (60 MB)',
+  'en_US-amy-low': 'Amy — US, female, small and fast (20 MB)',
+};
+const HD_AHEAD = 15;   // paragraphs of audio prepared ahead, so playback survives a locked screen
+const hd = { audio: new Audio(), session: null, buf: [], next: null, producing: false, waiting: false };
+hd.audio.preservesPitch = true;
+
+const hdReady = v => { try { return localStorage.getItem('shelf-hd-' + v) === '1'; } catch { return false; } };
+function hdProgress(p) {
+  if (!p.total) return;
+  const msg = `Downloading voice… ${Math.round(p.loaded / p.total * 100)}%`;
+  $('#hdStatus').textContent = msg;
+  if (tts.on && hd.waiting) $('#playBtn').textContent = msg.replace('Downloading voice…', '⇣');
+}
+async function hdSession() {
+  if (hd.session?.voiceId === settings.hdVoice) return hd.session;
+  const { TtsSession } = await import('./vendor/piper.js');
+  TtsSession._instance = null;   // the library keeps one session; a new voice needs a fresh one
+  const v = new URL('vendor/', location.href).href;
+  hd.session = await TtsSession.create({
+    voiceId: settings.hdVoice,
+    progress: hdProgress,
+    wasmPaths: { onnxWasm: v, piperData: v + 'piper_phonemize.data', piperWasm: v + 'piper_phonemize.wasm' },
+  });
+  try { localStorage.setItem('shelf-hd-' + settings.hdVoice, '1'); } catch {}
+  showHdStatus();
+  return hd.session;
+}
+
+// First text paragraph at or after pos, carrying into later chapters (unless sleeping at chapter end).
+function nextText({ ch, p }) {
+  for (;;) {
+    const paras = book.chapters[ch].paras;
+    while (p < paras.length && typeof paras[p] !== 'string') p++;
+    if (p < paras.length) return { ch, p };
+    if (ch + 1 >= book.chapters.length || ($('#sleep').value === 'chapter' && ch >= cur.ch)) return null;
+    ch++;
+    p = 0;
+  }
+}
+
+function clearHd() {
+  hd.audio.pause();
+  hd.audio.removeAttribute('src');
+  hd.buf.forEach(b => URL.revokeObjectURL(b.url));
+  hd.buf = [];
+  hd.next = null;
+  hd.waiting = false;
+}
+
+async function hdProduce(gen) {
+  if (hd.producing) return;
+  hd.producing = true;
+  try {
+    let session;
+    try { session = await hdSession(); }
+    catch (e) {
+      console.error(e);
+      if (gen === tts.gen) { stopSpeaking(); alert(`The HD voice couldn't load${navigator.onLine ? '' : ' — connect to the internet once to download it'}. (${e.message})`); }
+      return;
+    }
+    while (tts.on && gen === tts.gen && hd.next && hd.buf.length < HD_AHEAD) {
+      const { ch, p } = hd.next;
+      let blob = null;
+      try { blob = await session.predict(book.chapters[ch].paras[p]); }
+      catch (e) { console.warn('Skipped a paragraph the voice could not read', e); }
+      if (!tts.on || gen !== tts.gen) break;
+      if (blob) hd.buf.push({ ch, p, url: URL.createObjectURL(blob) });
+      hd.next = nextText({ ch, p: p + 1 });
+      if (hd.waiting) hdPlayNext(gen);
+    }
+  } finally {
+    hd.producing = false;
+  }
+  if (tts.on && gen !== tts.gen) hdProduce(tts.gen);   // a restart happened while busy
+  else if (gen === tts.gen && hd.waiting && !hd.buf.length && !hd.next) stopSpeaking();   // end of book
+}
+
+function hdPlayNext(gen) {
+  if (!tts.on || gen !== tts.gen) return;
+  const item = hd.buf[0];
+  if (!item) {
+    hd.waiting = true;
+    if (!hd.next && !hd.producing) stopSpeaking();
+    return;
+  }
+  hd.waiting = false;
+  if (item.ch !== cur.ch) showChapter(item.ch, item.p);
+  markSpeaking(item.p);
+  hd.audio.src = item.url;
+  hd.audio.defaultPlaybackRate = hd.audio.playbackRate = settings.rate;
+  hd.audio.play().catch(e => console.warn(e));
+  updateMediaSession();
+  hdProduce(gen);
+}
+hd.audio.onended = () => {
+  const done = hd.buf.shift();
+  if (done) URL.revokeObjectURL(done.url);
+  hdPlayNext(tts.gen);
+};
+hd.audio.onplay = () => {
+  $('#playBtn').textContent = '❚❚ Pause';
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+};
+hd.audio.onpause = () => {
+  if (!tts.on || hd.audio.ended || !hd.audio.src) return;
+  $('#playBtn').textContent = '▶ Resume';
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+};
+
+function updateMediaSession() {
+  if (!('mediaSession' in navigator) || !book) return;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: book.chapters[cur.ch].title,
+    artist: book.meta.title,
+    album: 'Shelf Reader',
+    artwork: [{ src: book.coverUrl || 'icon-512.png', sizes: '512x512' }],
+  });
+}
+function setupMediaSession() {
+  if (!('mediaSession' in navigator)) return;
+  const handlers = {
+    play: () => { if (!book) return; tts.on && hd.audio.src ? hd.audio.play() : startSpeaking(cur.p); },
+    pause: () => { if (useHd()) hd.audio.pause(); else stopSpeaking(); },
+    nexttrack: () => { if (tts.on && useHd()) hd.audio.onended(); },
+    previoustrack: () => { if (tts.on) startSpeaking(Math.max(0, cur.p - 1)); },
+  };
+  for (const [action, fn] of Object.entries(handlers)) {
+    try { navigator.mediaSession.setActionHandler(action, fn); } catch {}
+  }
+}
+
+function showHdStatus() {
+  const hdOn = useHd();
+  $('#hdRow').hidden = $('#hdActions').hidden = !hdOn;
+  $('#deviceVoiceRow').hidden = hdOn;
+  $('#hdStatus').textContent = !hdOn ? ''
+    : hdReady(settings.hdVoice) ? '✓ Downloaded — works offline and with the screen locked.'
+    : 'Downloads once on first use (or tap Download now on Wi-Fi). After that it works offline.';
+}
 
 function fillVoices() {
   if (!synth) return;
@@ -571,7 +736,11 @@ $('#backBtn').onclick = () => history.back();
 window.addEventListener('popstate', () => { if (book) closeBook(); });
 $('#prevChap').onclick = () => jumpChapter(cur.ch - 1);
 $('#nextChap').onclick = () => jumpChapter(cur.ch + 1);
-$('#playBtn').onclick = () => tts.on ? stopSpeaking() : startSpeaking(firstVisiblePara());
+$('#playBtn').onclick = () => {
+  if (!tts.on) return startSpeaking(firstVisiblePara());
+  if (!useHd() || hd.waiting) return stopSpeaking();
+  hd.audio.paused ? hd.audio.play() : hd.audio.pause();
+};
 $('#text').onclick = e => {
   if (pagedMode()) {
     // Tap the left or right third to turn the page (flipped for right-to-left manga).
@@ -593,7 +762,8 @@ document.addEventListener('keydown', e => {
 $('#rate').onchange = e => {
   settings.rate = +e.target.value;
   saveSettings();
-  if (tts.on) startSpeaking(tts.p);
+  if (useHd()) hd.audio.playbackRate = settings.rate;
+  else if (tts.on) startSpeaking(tts.p);
 };
 $('#sleep').onchange = e => {
   clearTimeout(tts.sleepTimer);
@@ -618,6 +788,7 @@ $('#settingsBtn').onclick = () => {
   fillVoices();
   $('#layoutRow').hidden = !isComic();
   $('#layout').value = book.meta.layout || 'vertical';
+  showHdStatus();
   $('#settings').showModal();
 };
 document.querySelectorAll('dialog .close').forEach(b => b.onclick = () => b.closest('dialog').close());
@@ -632,6 +803,16 @@ $('#layout').onchange = async e => {
   await put('meta', book.meta);
   showChapter(cur.ch, cur.p);
 };
+$('#engine').onchange = e => { const on = tts.on; stopSpeaking(); settings.engine = e.target.value; saveSettings(); showHdStatus(); if (on) startSpeaking(cur.p); };
+$('#hdVoice').onchange = e => { const on = tts.on; stopSpeaking(); settings.hdVoice = e.target.value; saveSettings(); showHdStatus(); if (on) startSpeaking(cur.p); };
+$('#hdDownload').onclick = async () => {
+  $('#hdStatus').textContent = 'Preparing…';
+  try { await hdSession(); } catch (e) { $('#hdStatus').textContent = `Download failed: ${e.message}`; }
+};
+for (const [id, name] of Object.entries(HD_VOICES)) $('#hdVoice').add(new Option(name, id));
+$('#engine').value = settings.engine;
+$('#hdVoice').value = settings.hdVoice;
+setupMediaSession();
 if (synth) synth.onvoiceschanged = fillVoices;
 
 $('#theme').value = settings.theme;

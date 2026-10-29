@@ -76,7 +76,16 @@
       <option value="ltr">Pages, left to right</option>
     </select>
   </label>
-  <label>Voice <select id="voice"></select></label>
+  <label>Voice engine
+    <select id="engine">
+      <option value="device">Device voice (instant)</option>
+      <option value="hd">HD offline voice (plays with screen locked)</option>
+    </select>
+  </label>
+  <label id="hdRow">HD voice <select id="hdVoice"></select></label>
+  <div id="hdActions"><button id="hdDownload" class="btn">Download now</button></div>
+  <p id="hdStatus" class="muted small"></p>
+  <label id="deviceVoiceRow">Voice <select id="voice"></select></label>
   <p class="muted small">Tips: tap any paragraph while listening to jump there. In page mode, tap the left or right side to turn pages.</p>
 </dialog>
 
