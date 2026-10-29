@@ -18,6 +18,7 @@
 <section id="library" class="view">
   <header class="bar">
     <div><h1>Shelf</h1><div id="greet"></div></div>
+    <button id="newBookBtn" class="btn">✎ New</button>
     <label class="btn primary">+ Add book<input id="file" type="file" accept=".epub,.txt,.cbz,.cbr,.cb7,.cbt,.zip,.rar,.7z,text/plain,application/epub+zip,application/zip,image/*" multiple hidden></label>
   </header>
   <div id="status" class="muted small" hidden></div>
@@ -65,6 +66,27 @@
 <dialog id="toc">
   <header class="bar"><h2>Chapters</h2><button class="icon close" aria-label="Close">✕</button></header>
   <ol id="tocList"></ol>
+  <button id="addChapBtn" class="btn primary wide">＋ Add chapter</button>
+</dialog>
+
+<dialog id="addChap">
+  <header class="bar"><h2 id="addTitle">Add a chapter</h2><button class="icon close" aria-label="Close">✕</button></header>
+  <label id="bookNameRow">Book name <input id="newName" placeholder="e.g. Myst, Might, Mayhem"></label>
+  <label id="kindRow">Type
+    <select id="newKind"><option value="novel">Novel (paste text)</option><option value="comic">Manga / manhwa (screenshots)</option></select>
+  </label>
+  <label>Chapter <input id="chapName"></label>
+  <div id="pasteBox">
+    <button class="btn" id="pasteBtn">📋 Paste copied text</button>
+    <textarea id="chapText" rows="9" placeholder="…or tap here and paste the chapter"></textarea>
+    <p class="muted small">On the chapter page: select all, copy, then come back here.</p>
+  </div>
+  <div id="picBox">
+    <label class="btn">🖼 Choose screenshots<input id="chapPics" type="file" accept="image/*" multiple hidden></label>
+    <span id="picCount" class="muted small"></span>
+    <p class="muted small">Pick this chapter's screenshots in reading order. They're added as the next chapter.</p>
+  </div>
+  <button class="btn primary wide" id="saveChap">Save chapter</button>
 </dialog>
 
 <dialog id="settings">
@@ -97,5 +119,6 @@
 <script src="jszip.min.js"></script>
 <script src="app.js"></script>
 <script src="follow.js"></script>
+<script src="add.js"></script>
 </body>
 </html>
