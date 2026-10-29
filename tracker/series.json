@@ -1,0 +1,7 @@
+[
+  { "id": "one-piece", "title": "One Piece", "type": "Manga", "mu": 55099564912,
+    "groups": ["MANGA Plus", "Viz"], "url": "https://mangaplus.shueisha.co.jp/titles/100020" },
+  { "id": "nano-machine", "title": "Nano Machine", "type": "Manhwa", "mu": 114563652, "groups": [] },
+  { "id": "myst-might-mayhem", "title": "Myst, Might, Mayhem", "type": "Manhwa", "mu": 66602465958,
+    "groups": ["LINE Webtoon"], "url": "https://www.webtoons.com/en/search?keyword=Myst%2C%20Might%2C%20Mayhem", "novel": true }
+]

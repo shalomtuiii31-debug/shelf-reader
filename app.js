@@ -330,6 +330,7 @@ async function renderLibrary() {
     };
     ul.append(li);
   }
+  if (typeof renderFollowing === 'function') renderFollowing();
 }
 
 // ---------- Reader ----------
@@ -339,7 +340,7 @@ let pageUrls = [];
 const isComic = () => book?.meta.kind === 'comic';
 const pagedMode = () => isComic() && book.meta.layout !== 'vertical';
 
-async function openBook(id) {
+async function openBook(id, at) {
   const [data, meta, pr] = await Promise.all([get('books', id), get('meta', id), get('progress', id)]);
   if (!data) return;
   book = { id, meta, chapters: data.chapters, images: data.images || [], coverUrl: meta.cover ? URL.createObjectURL(meta.cover) : '' };
@@ -349,7 +350,8 @@ async function openBook(id) {
   $('#library').hidden = true;
   $('#reader').hidden = false;
   history.pushState({ reader: true }, '');
-  showChapter(pr?.ch ?? 0, pr?.p ?? 0);
+  if (at) showChapter(at.ch, 0);
+  else showChapter(pr?.ch ?? 0, pr?.p ?? 0);
 }
 
 function closeBook() {
